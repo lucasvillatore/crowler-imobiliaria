@@ -2,7 +2,6 @@ import pandas as pd
 from providers.apolar import ApolarProvider
 from providers.galvao import GalvaoProvider
 
-# --- SEUS PARÂMETROS ---
 MEUS_FILTROS = {
     "cidade": "curitiba",
     "tipo": "apartamento",
@@ -20,7 +19,7 @@ MEUS_FILTROS = {
 def main():
     todos_imoveis = []
     providers = [
-        # ApolarProvider(),
+        ApolarProvider(),
         GalvaoProvider()
     ]
 
@@ -37,7 +36,6 @@ def main():
         df = pd.DataFrame(todos_imoveis)
         df = df.sort_values(by='Preco')
 
-        # Salvar
         df.to_excel("imoveis_filtrados.xlsx", index=False)
         print(f"\n✅ Relatório gerado com {len(todos_imoveis)} imóveis!")
         print(df[['Bairro', 'Preco', 'Area', 'Link']].head())

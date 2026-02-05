@@ -38,7 +38,6 @@ class ApolarProvider:
         tipo_imovel = filtros.get('tipo', 'apartamento')
         bairros = filtros.get('bairros', [])
 
-        # Filtros numéricos
         quartos_min = filtros.get('quartos_min', 0)
         preco_max = filtros.get('preco_max', 0)
         area_min = filtros.get('area_min', 0)
@@ -52,7 +51,6 @@ class ApolarProvider:
             for bairro in bairros:
                 slug_bairro = formatar_slug(bairro)
 
-                # Montagem da URL (Mantive igual)
                 url_path = f"{self.base_url}/{tipo_imovel}/{cidade_alvo}/{slug_bairro}"
                 if quartos_min > 0: url_path += f"/{quartos_min}-quartos"
 
@@ -80,37 +78,27 @@ class ApolarProvider:
 
                     for card in cards:
                         try:
-                            # --- 1. Extração de Dados ---
                             bairro_tag = card.find(class_='property-address-others')
                             bairro_encontrado_raw = bairro_tag.text.strip() if bairro_tag else ""
 
-                            # Normaliza para comparar (Ex: "Boa Vista, Curitiba" vira "boa-vista-curitiba")
                             bairro_encontrado_slug = formatar_slug(bairro_encontrado_raw)
 
-                            # --- 2. VALIDAÇÃO DE LOCALIZAÇÃO (TRAVA DE SEGURANÇA) ---
-                            # Verifica se o nome do bairro desejado está dentro do endereço achado
-                            # Ex: Se procuro "batel", aceito "batel, curitiba". Não aceito "centro".
 
                             if slug_bairro not in bairro_encontrado_slug:
-                                # Se o bairro do card for diferente do bairro da busca, é LIXO (propaganda/sugestão)
                                 continue
 
-                            # Verifica Cidade também (para evitar "Boqueirão" em outra cidade)
                             if cidade_alvo not in bairro_encontrado_slug:
                                 continue
 
-                            # --- 3. Extração Numérica e Validação ---
                             preco_raw = card.find(class_='property-current-price')
                             preco_val = limpar_numero(preco_raw.text) if preco_raw else 0
 
                             quartos_raw = card.find(class_='feature bed')
                             quartos_val = limpar_numero(quartos_raw.text) if quartos_raw else 0
 
-                            # Validação final de valores (URL filter as vezes falha)
                             if preco_max > 0 and preco_val > preco_max: continue
                             if quartos_min > 0 and quartos_val < quartos_min: continue
 
-                            # --- 4. Coleta Final ---
                             tag_link = card.find('a', href=True)
                             link = tag_link['href'] if tag_link else ""
 
@@ -120,8 +108,8 @@ class ApolarProvider:
 
                             resultados.append({
                                 'Imobiliaria': 'Apolar',
-                                'Bairro': bairro, # Salvamos o bairro que PEDIMOS (já validado)
-                                'Local Real': bairro_encontrado_raw, # Para conferência
+                                'Bairro': bairro,
+                                'Local Real': bairro_encontrado_raw,
                                 'Tipo': tipo_imovel,
                                 'Preco': preco_val,
                                 'Quartos': int(quartos_val),
