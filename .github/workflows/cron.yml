@@ -29,15 +29,14 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-python-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('requirements.txt') }}
 
-      - name: Install Playwright Browsers & Deps
+      - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: playwright install chromium --with-deps
+        run: npx playwright install chromium
 
-      - name: Install System Deps (Ubuntu)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: playwright install-deps chromium
+      - name: Install Playwright System Deps
+        run: npx playwright install-deps chromium
 
       - name: Run Crawler
         env:
