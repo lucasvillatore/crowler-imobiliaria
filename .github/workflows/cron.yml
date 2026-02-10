@@ -3,7 +3,7 @@ name: Real Estate Crawler & Email
 on:
   schedule:
     # A cada 2 horas, entre 11:00 UTC (08h BRT) e 01:00 UTC (22h BRT)
-    - cron: "0 11-23/2,1 * * *"
+    - cron: "27 11-23/2,1 * * *"
   workflow_dispatch:
 
 jobs:
