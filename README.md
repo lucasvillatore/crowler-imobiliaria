@@ -20,6 +20,7 @@ Scripts em Python para automação de busca de imóveis para aluguel. O sistema 
 │   ├── apolar.py        # Lógica de scraping da Apolar
 │   └── galvao.py        # Lógica de scraping da Galvão
 └── README.md
+```
 
 ## Instalação
 
