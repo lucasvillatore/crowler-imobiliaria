@@ -1,7 +1,18 @@
-import pandas as pd
+import os
+from datetime import datetime
+from decimal import Decimal
+
+import boto3
+from dotenv import load_dotenv
 
 from providers.apolar import ApolarProvider
 from providers.galvao import GalvaoProvider
+
+load_dotenv()
+
+TABLE_NAME = os.getenv("DYNAMODB_TABLE")
+dynamodb = boto3.resource("dynamodb", region_name=os.getenv("AWS_REGION", "us-east-2"))
+table = dynamodb.Table(TABLE_NAME)
 
 MEUS_FILTROS = {
     "cidade": "curitiba",
@@ -31,9 +42,32 @@ MEUS_FILTROS = {
 }
 
 
+def salvar_no_dynamo(imoveis):
+    print(f"\n--> [DynamoDB] Processando {len(imoveis)} imóveis...")
+
+    for imovel in imoveis:
+        try:
+            item = {
+                "id_imovel": imovel["Link"],
+                "data_scraped": datetime.now().strftime("%Y-%m-%d"),
+                "Imobiliaria": imovel["Imobiliaria"],
+                "Bairro": imovel["Bairro"],
+                "Preco": Decimal(str(imovel["Preco"])),
+                "Area": str(imovel["Area"]),
+                "Quartos": int(imovel["Quartos"]),
+                "Link": imovel["Link"],
+                "updated_at": datetime.now().isoformat(),
+            }
+
+            table.put_item(Item=item)
+
+        except Exception as e:
+            print(f"❌ Erro ao processar imóvel {imovel.get('Link')}: {e}")
+
+
 def main():
     todos_imoveis = []
-    providers = [ApolarProvider(), GalvaoProvider()]
+    providers = [ApolarProvider()]
 
     print("=== BUSCADOR DE IMÓVEIS OTIMIZADO ===")
 
@@ -42,17 +76,20 @@ def main():
             imoveis = provider.run(MEUS_FILTROS)
             todos_imoveis.extend(imoveis)
         except Exception as e:
-            print(f"Erro: {e}")
+            print(f"Erro no provider: {e}")
 
     if todos_imoveis:
-        df = pd.DataFrame(todos_imoveis)
-        df = df.sort_values(by="Preco")
+        salvar_no_dynamo(todos_imoveis)
 
-        df.to_excel("imoveis_filtrados.xlsx", index=False)
-        print(f"\n✅ Relatório gerado com {len(todos_imoveis)} imóveis!")
-        print(df[["Bairro", "Preco", "Area", "Link"]].head())
+        # df = pd.DataFrame(todos_imoveis)
+        # df = df.sort_values(by="Preco")
+        # df.to_excel("imoveis_filtrados.xlsx", index=False)
+
+        print(
+            f"\n✅ Script finalizado. Total de {len(todos_imoveis)} imóveis encontrados."
+        )
     else:
-        print("\nNenhum imóvel encontrado. Tente aumentar o preço ou diminuir a área.")
+        print("\nNenhum imóvel encontrado.")
 
 
 if __name__ == "__main__":
