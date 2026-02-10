@@ -43,43 +43,55 @@ def buscar_dados():
     return df
 
 
+SENDER = "lucas.blockv@gmail.com"
+DESTINATARIOS = ["lucas.blockv@gmail.com", "anaapaulasodre@gmail.com"]
+
+
 def enviar_email(df):
     filename = f"relatorio_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
     df.to_excel(filename, index=False)
 
+    # Criamos a mensagem
     msg = MIMEMultipart()
-    msg["Subject"] = f"🏠 Imóveis Curitiba - {datetime.now().strftime('%d/%m')}"
+    msg["Subject"] = f"🏠 Imóveis Curitiba - {len(df)} Novidades"
     msg["From"] = SENDER
-    msg["To"] = RECIPIENT
+    # No cabeçalho 'To', mostramos todos os destinatários separados por vírgula
+    msg["To"] = ", ".join(DESTINATARIOS)
 
-    # Header importante para evitar filtros de spam de "lote"
-    msg.add_header("X-Priority", "3")
-    msg.add_header("Precedence", "bulk")  # Indica que é um envio automatizado legítimo
-
-    # Melhore o corpo do e-mail (HTML é menos "spameável" que texto puro se bem feito)
-    corpo = f"""
-      <html>
-      <body>
-            <h3>Olá! Encontramos {len(df)} novos imóveis.</h3>
-            <p>O relatório detalhado está em anexo no formato Excel.</p>
+    # Corpo do e-mail melhorado para evitar Spam
+    corpo_html = f"""
+    <html>
+        <body>
+            <h2>Novos imóveis encontrados!</h2>
+            <p>Olá, seguem as <b>{len(df)}</b> novas oportunidades encontradas nas últimas 2 horas.</p>
+            <p>O arquivo Excel está anexado a este e-mail.</p>
             <br>
-            <small>Este é um alerta automático do seu Crawler de Imóveis.</small>
-      </body>
-      </html>
-      """
-    msg.attach(MIMEText(corpo, "html"))
+            <hr>
+            <p><small>Alerta automático gerado pelo Crawler de Imóveis.</small></p>
+        </body>
+    </html>
+    """
+    msg.attach(MIMEText(corpo_html, "html"))
 
     with open(filename, "rb") as f:
         part = MIMEApplication(f.read())
         part.add_header("Content-Disposition", "attachment", filename=filename)
         msg.attach(part)
 
-    ses = boto3.client("ses", region_name=REGION)
-    ses.send_raw_email(
-        Source=SENDER, Destinations=[RECIPIENT], RawMessage={"Data": msg.as_string()}
-    )
-    print("✅ Relatório enviado!")
-    os.remove(filename)
+    ses = boto3.client("ses", region_name=os.getenv("AWS_REGION", "us-east-2"))
+
+    try:
+        response = ses.send_raw_email(
+            Source=SENDER,
+            Destinations=DESTINATARIOS,
+            RawMessage={"Data": msg.as_string()},
+        )
+        print(f"✅ Relatório enviado com sucesso para: {', '.join(DESTINATARIOS)}")
+    except Exception as e:
+        print(f"❌ Falha ao enviar e-mail: {e}")
+    finally:
+        if os.path.exists(filename):
+            os.remove(filename)
 
 
 if __name__ == "__main__":
