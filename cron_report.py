@@ -13,7 +13,7 @@ load_dotenv()
 
 SENDER = os.getenv("EMAIL_SENDER")
 RECIPIENT = os.getenv("EMAIL_RECIPIENT")
-REGION = os.getenv("AWS_REGION", "us-east-1")
+REGION = os.getenv("AWS_REGION")
 
 
 def buscar_dados():
