@@ -48,15 +48,26 @@ def enviar_email(df):
     df.to_excel(filename, index=False)
 
     msg = MIMEMultipart()
-    msg["Subject"] = f"📊 Alerta de Imóveis - {len(df)} oportunidades"
+    msg["Subject"] = f"🏠 Imóveis Curitiba - {datetime.now().strftime('%d/%m')}"
     msg["From"] = SENDER
     msg["To"] = RECIPIENT
-    msg.attach(
-        MIMEText(
-            f"Olá! Foram encontrados {len(df)} imóveis nas últimas 8 horas. Veja o anexo.",
-            "plain",
-        )
-    )
+
+    # Header importante para evitar filtros de spam de "lote"
+    msg.add_header("X-Priority", "3")
+    msg.add_header("Precedence", "bulk")  # Indica que é um envio automatizado legítimo
+
+    # Melhore o corpo do e-mail (HTML é menos "spameável" que texto puro se bem feito)
+    corpo = f"""
+      <html>
+      <body>
+            <h3>Olá! Encontramos {len(df)} novos imóveis.</h3>
+            <p>O relatório detalhado está em anexo no formato Excel.</p>
+            <br>
+            <small>Este é um alerta automático do seu Crawler de Imóveis.</small>
+      </body>
+      </html>
+      """
+    msg.attach(MIMEText(corpo, "html"))
 
     with open(filename, "rb") as f:
         part = MIMEApplication(f.read())
