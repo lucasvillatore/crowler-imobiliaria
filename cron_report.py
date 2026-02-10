@@ -20,7 +20,7 @@ def buscar_dados():
     dynamo = boto3.resource("dynamodb", region_name=REGION)
     table = dynamo.Table(os.getenv("DYNAMODB_TABLE"))
 
-    limite_tempo = (datetime.now() - timedelta(hours=8)).isoformat()
+    limite_tempo = (datetime.now() - timedelta(hours=2)).isoformat()
 
     print(f"🔎 Filtrando apenas imóveis que entraram no sistema após: {limite_tempo}")
 
