@@ -44,6 +44,7 @@ MEUS_FILTROS = {
 
 def salvar_no_dynamo(imoveis):
     print(f"\n--> [DynamoDB] Processando {len(imoveis)} imóveis...")
+    novos_inseridos = 0
 
     for imovel in imoveis:
         try:
@@ -59,15 +60,22 @@ def salvar_no_dynamo(imoveis):
                 "updated_at": datetime.now().isoformat(),
             }
 
-            table.put_item(Item=item)
+            table.put_item(
+                Item=item, ConditionExpression="attribute_not_exists(id_imovel)"
+            )
+            novos_inseridos += 1
 
+        except dynamodb.meta.client.exceptions.ConditionalCheckFailedException:
+            continue
         except Exception as e:
             print(f"❌ Erro ao processar imóvel {imovel.get('Link')}: {e}")
+
+    print(f"📊 Resultado: {novos_inseridos} novos imóveis salvos.")
 
 
 def main():
     todos_imoveis = []
-    providers = [ApolarProvider()]
+    providers = [ApolarProvider(), GalvaoProvider()]
 
     print("=== BUSCADOR DE IMÓVEIS OTIMIZADO ===")
 

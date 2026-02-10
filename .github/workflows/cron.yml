@@ -1,47 +1,47 @@
-name: Real Estate Crawler Python
+name: Real Estate Crawler & Email
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    # A cada 2 horas, entre 11:00 UTC (08h BRT) e 01:00 UTC (22h BRT)
+    - cron: "0 11-23/2,1 * * *"
   workflow_dispatch:
 
 jobs:
-  scrape:
+  run-task:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Cache Playwright Browsers
-        id: playwright-cache
+      - name: Cache dependencies
         uses: actions/cache@v3
         with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('requirements.txt') }}
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
 
-      - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
 
-      - name: Install Playwright System Deps
-        run: npx playwright install-deps chromium
-
-      - name: Run Crawler
+      - name: Step 1 Run Crawler
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          DYNAMODB_TABLE: ${{ secrets.DYNAMODB_TABLE }}
+          AWS_REGION: "us-east-2"
+          DYNAMODB_TABLE: "imoveis_crawler"
         run: python main.py
+
+      - name: Step 2 Send Email Report
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: "us-east-2"
+          DYNAMODB_TABLE: "imoveis_crawler"
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+        run: python cron_report.py
