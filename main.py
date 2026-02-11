@@ -50,7 +50,7 @@ def salvar_no_dynamo(imoveis):
         try:
             item = {
                 "id_imovel": imovel["Link"],
-                "data_scraped": datetime.now().strftime("%Y-%m-%d"),
+                "data_scraped": '2026-02-11', # sort key mocada para não duplicar os dados. Não quero recriar a tabela então vai servir só como id_imovel como unico
                 "Imobiliaria": imovel["Imobiliaria"],
                 "Bairro": imovel["Bairro"],
                 "Preco": Decimal(str(imovel["Preco"])),
