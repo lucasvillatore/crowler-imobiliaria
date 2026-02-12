@@ -19,10 +19,7 @@ def buscar_dados():
     dynamo = boto3.resource("dynamodb", region_name=REGION)
     table = dynamo.Table(TABLE_NAME)
 
-    # Filtro das ultimas 2 horas
     limite_tempo = (datetime.now() - timedelta(hours=2)).isoformat()
-
-    print(f"Filtrando imoveis atualizados apos: {limite_tempo}")
 
     response = table.scan(
         FilterExpression="updated_at >= :t",
@@ -35,11 +32,9 @@ def buscar_dados():
 
     df = pd.DataFrame(items)
     
-    # Remove duplicados e garante que id_imovel exista
     if "id_imovel" in df.columns:
         df = df.drop_duplicates(subset=["id_imovel"])
 
-    # Conversao de Decimal para float (necessario para o pandas/formatacao)
     for col in df.columns:
         df[col] = df[col].apply(lambda x: float(x) if isinstance(x, Decimal) else x)
 
@@ -54,25 +49,25 @@ def enviar_email(df):
     itens_html = ""
     for _, row in df.iterrows():
         try:
-            valor_num = float(row.get('valor', 0))
-            valor = f"R$ {valor_num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        except (ValueError, TypeError):
-            valor = "Preco nao informado"
+            preco_num = float(row.get('Preco', 0))
+            preco = f"R$ {preco_num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except:
+            preco = "Nao informado"
 
-        bairro = row.get('bairro', 'Nao informado')
-        link = row.get('link', '#')
-        titulo = row.get('titulo', 'Imovel sem titulo')
-        area = row.get('area', '--')
-        quartos = row.get('quartos', '--')
+        bairro = row.get('Bairro', 'Nao informado')
+        link = row.get('Link', '#')
+        imobiliaria = row.get('Imobiliaria', 'Nao informada')
+        area = row.get('Area', '--')
+        quartos = row.get('Quartos', '--')
 
-        itens_html += f"""
+        bloco_imovel = f"""
         <div style="border-bottom: 1px solid #eee; padding: 20px 0; font-family: sans-serif;">
-            <h3 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 18px;">{titulo}</h3>
+            <h3 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 18px;">Imovel em {bairro}</h3>
             <p style="margin: 5px 0; font-size: 16px;">
-                <b style="color: #28a745;">{valor}</b>
+                <b style="color: #28a745;">{preco}</b>
             </p>
             <p style="margin: 5px 0; color: #555;">
-                <b>Bairro:</b> {bairro}<br>
+                <b>Imobiliaria:</b> {imobiliaria}<br>
                 <b>Area:</b> {area} m2 | <b>Quartos:</b> {quartos}
             </p>
             <div style="margin-top: 12px;">
@@ -80,8 +75,8 @@ def enviar_email(df):
                     Ver Detalhes
                 </a>
             </div>
-        </div>
-        """
+        </div>"""
+        itens_html += bloco_imovel
 
     corpo_html = f"""
     <html>
@@ -107,16 +102,10 @@ def enviar_email(df):
             Destinations=DESTINATARIOS,
             RawMessage={"Data": msg.as_string()},
         )
-        print(f"Sucesso: Relatorio enviado para {len(DESTINATARIOS)} destinatarios.")
     except Exception as e:
-        print(f"Erro ao enviar e-mail: {e}")
+        print(f"Erro: {e}")
 
 if __name__ == "__main__":
-    try:
-        df_imoveis = buscar_dados()
-        if df_imoveis is not None and not df_imoveis.empty:
-            enviar_email(df_imoveis)
-        else:
-            print("Nenhum imovel novo encontrado no periodo.")
-    except Exception as e:
-        print(f"Erro critico na execucao: {e}")
+    df_imoveis = buscar_dados()
+    if df_imoveis is not None and not df_imoveis.empty:
+        enviar_email(df_imoveis)
