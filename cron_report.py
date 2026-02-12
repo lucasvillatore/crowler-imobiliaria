@@ -48,6 +48,8 @@ def enviar_email(df):
 
     itens_html = ""
     for _, row in df.iterrows():
+
+        print(row)
         try:
             preco_num = float(row.get('Preco', 0))
             preco = f"R$ {preco_num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
