@@ -7,7 +7,6 @@ import urllib.parse
 
 def formatar_slug(texto):
     if not texto: return ""
-    # Remove acentos e troca espaços por hifens para a parte estrutural da URL
     texto = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('ASCII')
     return texto.lower().strip().replace(' ', '-')
 
@@ -21,45 +20,56 @@ class ZapProvider:
     def __init__(self):
         self.base_url = "https://www.zapimoveis.com.br/aluguel"
         self.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        
+        # Mapeamento para garantir que o 'onde' vá com a acentuação correta que o Zap exige
+        self.correcao_bairros = {
+            "ahu": "Ahú",
+            "alto da gloria": "Alto da Glória",
+            "alto da rua xv": "Alto da Rua XV",
+            "agua verde": "Água Verde",
+            "batel": "Batel",
+            "bigorrilho": "Bigorrilho",
+            "bom retiro": "Bom Retiro",
+            "cabral": "Cabral",
+            "centro": "Centro",
+            "champagnat": "Champagnat",
+            "hugo lange": "Hugo Lange",
+            "jardim social": "Jardim Social",
+            "juveve": "Juvevê",
+            "merces": "Mercês",
+            "mossungue": "Mossunguê",
+            "portao": "Portão"
+        }
 
     def run(self, filtros):
         resultados = []
         cidade = "Curitiba"
         estado = "Paraná"
-        
-        # Lista de bairros vinda dos filtros (com a correção de casing)
-        bairros_raw = filtros.get('bairros', [])
+        hierarquia_estado = "Parana" # Sem acento na hierarquia da URL
+
+        bairros_lista = filtros.get('bairros', [])
         preco_max = filtros.get('preco_max', 2500)
         area_min = filtros.get('area_min', 50)
 
         with sync_playwright() as p:
             print("--> [Zap] Iniciando navegador...")
             browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent=self.user_agent,
-                locale="pt-BR",
-                timezone_id="America/Sao_Paulo"
-            )
+            context = browser.new_context(user_agent=self.user_agent, locale="pt-BR")
             page = context.new_page()
 
-            for bairro in bairros_raw:
-                # 1. Formatações para a URL
-                bairro_slug = formatar_slug(bairro) # ex: agua-verde
-                # O Zap espera o nome no 'onde' exatamente como no cadastro deles (Camel Case)
-                bairro_title = bairro.title().replace("Da ", "da ").replace("De ", "de ")
-                
-                # 2. Montagem do parâmetro 'onde' conforme seu exemplo
-                # Note as vírgulas (%2C) e a hierarquia
-                # BR>Parana (sem acento no hierarchy) > Curitiba > Barrios > Nome
-                hierarquia_estado = "Parana"
-                onde_str = f", {estado}, {cidade}, , {bairro_title}, , , neighborhood, BR>{hierarquia_estado}>NULL>{cidade}>Barrios>{bairro_title}, , "
-                onde_encoded = urllib.parse.quote(onde_str)
+            for bairro_chave in bairros_lista:
+                # 1. Tratamento dos nomes
+                bairro_slug = formatar_slug(bairro_chave)
+                bairro_formatado = self.correcao_bairros.get(bairro_chave.lower(), bairro_chave.title())
 
-                # 3. Construção da URL Final
+                # 2. Montagem da URL conforme seu padrão
+                onde_str = f", {estado}, {cidade}, , {bairro_formatado}, , , neighborhood, BR>{hierarquia_estado}>NULL>{cidade}>Barrios>{bairro_formatado}, , "
+                onde_param = urllib.parse.quote(onde_str)
+
                 full_url = (
                     f"{self.base_url}/apartamentos/pr+curitiba++{bairro_slug}/2-quartos/?"
                     f"transacao=aluguel&"
-                    f"onde={onde_encoded}&"
+                    f"onde={onde_param}&"
                     f"tipos=apartamento_residencial&"
                     f"quartos=2%2C3%2C4&"
                     f"precoMaximo={int(preco_max)}&"
@@ -67,69 +77,63 @@ class ZapProvider:
                     f"origem=busca-recente"
                 )
 
-                print(f"--> [Zap] Buscando em: {bairro_title}")
+                print(f"--> [Zap] Buscando: {bairro_formatado}")
 
                 try:
-                    # Vai para a página e espera os resultados
                     page.goto(full_url, wait_until="load", timeout=60000)
                     
-                    # Espera as LIs da lista oficial (data-cy="rp-property-cd")
+                    # Espera as LIs da lista oficial (rp-property-cd)
                     try:
                         page.wait_for_selector('li[data-cy="rp-property-cd"]', timeout=15000)
                     except:
-                        print(f"    ⚠️  Bairro {bairro_title} não retornou lista de resultados.")
                         continue
 
-                    # Scroll para garantir que o lazy load não quebre o soup
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
+                    # Scroll rápido para carregar as informações do card
+                    page.evaluate("window.scrollBy(0, 600)")
                     time.sleep(1)
 
                     soup = BeautifulSoup(page.content(), 'html.parser')
-                    # Pega apenas as LIs da lista, não os recomendados
-                    lis = soup.find_all('li', {'data-cy': 'rp-property-cd'})
+                    # Pega apenas os itens da lista real, não os recomendados
+                    itens_lista = soup.find_all('li', {'data-cy': 'rp-property-cd'})
 
-                    validos_bairro = 0
-                    for li in lis:
-                        card = li.find('a', class_='olx-core-surface')
-                        if not card: continue
-
-                        link = card.get('href', '')
-                        if not link.startswith('http'):
-                            link = f"https://www.zapimoveis.com.br{link}"
-
-                        # Extração de dados
+                    for item in itens_lista:
                         try:
-                            # Preço principal
-                            preco_tag = li.find('p', class_='olx-ad-card__price')
+                            card_link = item.find('a', {'data-ds-component': 'DS-Surface'})
+                            if not card_link: continue
+
+                            link = card_link.get('href', '')
+                            if not link.startswith('http'):
+                                link = f"https://www.zapimoveis.com.br{link}"
+
+                            # Preço
+                            preco_tag = item.find('p', class_='olx-ad-card__price')
                             preco_val = limpar_numero(preco_tag.text) if preco_tag else 0
 
-                            # Características (Área e Quartos) via data-cy
-                            area_tag = li.find('li', {'data-cy': 'rp-cardProperty-propertyArea-txt'})
-                            area_txt = area_tag.get_text(strip=True) if area_tag else "-"
+                            # Características usando os IDs do data-cy que você enviou no HTML
+                            area_tag = item.find('li', {'data-cy': 'rp-cardProperty-propertyArea-txt'})
+                            area_val = area_tag.get_text(strip=True) if area_tag else "-"
 
-                            quartos_tag = li.find('li', {'data-cy': 'rp-cardProperty-bedroomQuantity-txt'})
-                            quartos_val = limpar_numero(quartos_tag.text) if quartos_tag else 2
+                            quartos_tag = item.find('li', {'data-cy': 'rp-cardProperty-bedroomQuantity-txt'})
+                            quartos_val = limpar_numero(quartos_tag.get_text()) if quartos_tag else 0
 
                             resultados.append({
                                 'Imobiliaria': 'Zap Imóveis',
-                                'Bairro': bairro_title,
+                                'Bairro': bairro_formatado,
                                 'Preco': preco_val,
                                 'Quartos': int(quartos_val),
-                                'Area': area_txt,
+                                'Area': area_val,
                                 'Link': link
                             })
-                            validos_bairro += 1
-                        except Exception as e:
+                        except Exception:
                             continue
 
-                    print(f"    ✅ Encontrados {validos_bairro} imóveis.")
+                    print(f"    Encontrados {len(itens_lista)} itens na lista.")
 
                 except Exception as e:
-                    print(f"    ❌ Erro crítico no bairro {bairro}: {e}")
+                    print(f"    Erro no bairro {bairro_formatado}: {e}")
 
-                # Delay maior entre bairros para evitar bloqueio de IP (importante no Zap)
-                time.sleep(random.uniform(3, 6))
+                # O Zap é agressivo no bloqueio, 3 a 5 segundos de respiro entre bairros é o ideal
+                time.sleep(random.uniform(3, 5))
 
             browser.close()
-
         return resultados
