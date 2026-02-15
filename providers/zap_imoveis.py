@@ -24,100 +24,109 @@ class ZapProvider:
     def run(self, filtros):
         resultados = []
         
-        cidade = filtros.get('cidade', 'curitiba')
-        estado = "pr"
-        tipo = filtros.get('tipo', 'apartamentos')
-        if not tipo.endswith('s'): tipo += 's' 
-        
+        cidade = "Curitiba"
+        estado = "Paraná"
         bairros = filtros.get('bairros', [])
         preco_max = filtros.get('preco_max', 0)
         area_min = filtros.get('area_min', 0)
-        quartos_min = filtros.get('quartos_min', 0)
+        quartos_min = filtros.get('quartos_min', 2)
 
         with sync_playwright() as p:
             print("--> [Zap Imóveis] Iniciando navegador...")
-            browser = p.chromium.launch(headless=True) 
-            
-            context = browser.new_context(user_agent=self.user_agent, viewport={'width': 1280, 'height': 800})
+            browser = p.chromium.launch(headless=True)
+            # O Zap é sensível ao contexto, então definimos o User-Agent aqui
+            context = browser.new_context(user_agent=self.user_agent)
             page = context.new_page()
 
             for bairro in bairros:
                 slug_bairro = formatar_slug(bairro)
-                
-                url_path = f"{self.base_url}/{tipo}/{estado}+{cidade}++{slug_bairro}"
-                if quartos_min > 0:
-                    url_path += f"/{quartos_min}-quartos"
-                
-                # Parâmetros de Query String
-                params = {
-                    'transacao': 'aluguel',
-                    'tipoUnidade': 'Residencial',
-                    'tipos': 'apartamento_residencial'
-                }
-                
-                if preco_max > 0: params['precoMaximo'] = int(preco_max)
-                if area_min > 0: params['areaMinima'] = int(area_min)
-                
-                full_url = f"{url_path}/?{urllib.parse.urlencode(params)}"
+                # Nome do bairro com a primeira letra maiúscula para a string 'onde'
+                bairro_formatado = bairro.title()
 
-                print(f"--> [Zap Imóveis] Buscando em {bairro.upper()}")
+                # Montando a string 'onde' exatamente como você enviou
+                # Nota: Deixamos as coordenadas vazias no final (,,) conforme sua observação
+                onde_raw = f", {estado}, {cidade}, , {bairro_formatado}, , , neighborhood, BR>{estado}>NULL>{cidade}>Barrios>{bairro_formatado}, , "
+                
+                # Encoda a string (Transforma vírgulas em %2C, etc)
+                onde_param = urllib.parse.quote(onde_raw)
+
+                # Montagem da URL final com os query params solicitados
+                full_url = (
+                    f"{self.base_url}/apartamentos/pr+curitiba++{slug_bairro}/{quartos_min}-quartos/?"
+                    f"transacao=aluguel&"
+                    f"onde={onde_param}&"
+                    f"tipos=apartamento_residencial&"
+                    f"quartos=2%2C3%2C4&" # Mantendo o padrão de múltiplos quartos que você enviou
+                    f"precoMaximo={int(preco_max)}&"
+                    f"areaMinima={int(area_min)}&"
+                    f"origem=busca-recente"
+                )
+
+                print(f"--> [Zap] Buscando bairro: {bairro.upper()}")
 
                 try:
+                    # Navigation
                     page.goto(full_url, wait_until="domcontentloaded", timeout=60000)
                     
-                    page.mouse.wheel(0, 1000)
-                    time.sleep(2)
-
+                    # Espera o seletor do link (card) que você forneceu
                     try:
-                        page.wait_for_selector('a[data-ds-component="DS-Surface"]', timeout=10000)
+                        page.wait_for_selector('a.olx-core-surface', timeout=12000)
                     except:
-                        print(f"    (Sem resultados para {bairro})")
+                        print(f"    (Sem resultados ou timeout para {bairro})")
                         continue
 
                     soup = BeautifulSoup(page.content(), 'html.parser')
-                    cards = soup.find_all('a', {'data-ds-component': 'DS-Surface'})
+                    # Busca pelos links que possuem a classe do card
+                    cards = soup.find_all('a', class_='olx-core-surface')
 
                     validos = 0
                     for card in cards:
                         try:
+                            # Link do imóvel
                             link = card.get('href', '')
                             if not link.startswith('http'):
                                 link = f"https://www.zapimoveis.com.br{link}"
 
-                            info_texto = card.get('title', '') or card.get('aria-label', '')
-                            
-                            preco_tag = card.find(string=lambda t: 'R$' in str(t))
-                            preco_val = limpar_numero(preco_tag) if preco_tag else 0
-                            
-                            area_txt = "-"
-                            if "m²" in info_texto:
-                                area_txt = info_texto.split('m²')[0].split('com')[-1].strip() + " m²"
-                            
-                            if preco_val == 0:
-                                p_tag = card.find('p', {'data-ds-component': 'DS-Text'})
-                                if p_tag: preco_val = limpar_numero(p_tag.text)
+                            # Preço - O Zap usa a classe olx-ad-card__price dentro desse surface
+                            preco_tag = card.find('p', class_='olx-ad-card__price')
+                            preco_val = limpar_numero(preco_tag.text) if preco_tag else 0
 
-                            if preco_max > 0 and preco_val > preco_max: continue
+                            # Área e Quartos - Geralmente em spans de características
+                            # Vamos extrair do title do card que você enviou, que é bem completo
+                            info_title = card.get('title', '')
+                            
+                            # Fallback para pegar a área do texto do card se o title falhar
+                            area_txt = "-"
+                            if "m²" in info_title:
+                                # Pega o valor que vem antes de "m²"
+                                area_txt = info_title.split("m²")[0].split()[-1] + " m²"
+                            
+                            quartos_val = quartos_min
+                            if "quartos" in info_title:
+                                # Tenta extrair o número de quartos do title
+                                try:
+                                    quartos_val = int(info_title.split("quartos")[0].split()[-1])
+                                except: pass
 
                             resultados.append({
                                 'Imobiliaria': 'Zap Imóveis',
-                                'Bairro': bairro,
-                                'Tipo': tipo,
+                                'Bairro': bairro_formatado,
                                 'Preco': preco_val,
-                                'Quartos': int(quartos_min), # Baseado na busca
+                                'Quartos': quartos_val,
                                 'Area': area_txt,
                                 'Link': link
                             })
                             validos += 1
 
-                        except Exception as e:
+                        except Exception:
                             continue
 
-                    print(f"    Cards encontrados: {len(cards)} | Válidos: {validos}")
+                    print(f"    Cards na página: {len(cards)} | Processados: {validos}")
 
                 except Exception as e:
-                    print(f"    Erro ao acessar URL: {e}")
+                    print(f"    Erro ao processar {bairro}: {e}")
 
+                # Sleep aleatório para não ser bloqueado rápido
                 time.sleep(random.uniform(2, 4))
 
             browser.close()
