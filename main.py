@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from providers.apolar import ApolarProvider
 from providers.galvao import GalvaoProvider
-
+from providers.zap_imoveis import ZapProvider
 load_dotenv()
 
 TABLE_NAME = os.getenv("DYNAMODB_TABLE")
@@ -75,7 +75,11 @@ def salvar_no_dynamo(imoveis):
 
 def main():
     todos_imoveis = []
-    providers = [ApolarProvider(), GalvaoProvider()]
+    providers = [
+        # ApolarProvider(), 
+        # GalvaoProvider(),
+        ZapProvider()
+    ]
 
     print("=== BUSCADOR DE IMÓVEIS OTIMIZADO ===")
 
