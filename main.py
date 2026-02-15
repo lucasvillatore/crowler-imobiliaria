@@ -76,9 +76,9 @@ def salvar_no_dynamo(imoveis):
 def main():
     todos_imoveis = []
     providers = [
-        # ApolarProvider(), 
-        # GalvaoProvider(),
-        ZapProvider()
+        ApolarProvider(), 
+        GalvaoProvider(),
+        # ZapProvider()
     ]
 
     print("=== BUSCADOR DE IMÓVEIS OTIMIZADO ===")
