@@ -34,6 +34,8 @@ MEUS_FILTROS = {
         "merces",
         "mossungue",
         "portao",
+        "cajuru",
+        "capao da imbuia",
     ],
     "preco_max": 2500.00,
     "area_min": 60,
