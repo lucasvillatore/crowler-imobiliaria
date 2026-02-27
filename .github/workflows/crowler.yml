@@ -1,8 +1,8 @@
 name: 1 - Real Estate Crawler
 
 on:
-  schedule:
-    - cron: "27 11-23/2,1 * * *"
+  # schedule:
+  #   - cron: "27 11-23/2,1 * * *"
   workflow_dispatch:
 
 jobs:
@@ -33,4 +33,5 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           DYNAMODB_TABLE: ${{ secrets.DYNAMODB_TABLE }}
+
         run: python main.py
