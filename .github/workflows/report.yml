@@ -1,10 +1,10 @@
 name: 2 - Send Email Report
 
 on:
-  # workflow_run:
-  #   workflows: ["1 - Real Estate Crawler"]
-  #   types:
-  #     - completed
+  workflow_run:
+    workflows: ["1 - Real Estate Crawler"]
+    types:
+      - completed
   workflow_dispatch:
 
 jobs:
