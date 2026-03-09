@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SENDER = "lucas.blockv@gmail.com"
-DESTINATARIOS = ["lucas.blockv@gmail.com", "anaapaulasodre@gmail.com"]
+DESTINATARIOS = ["lucas.blockv@gmail.com"]
 REGION = os.getenv("AWS_REGION", "us-east-2")
 TABLE_NAME = os.getenv("DYNAMODB_TABLE")
 
