@@ -1,8 +1,8 @@
 name: 1 - Real Estate Crawler
 
 on:
-  schedule:
-    - cron: "27 11-23/2,1 * * *"
+  # schedule:
+  #   - cron: "27 11-23/2,1 * * *"
   workflow_dispatch:
 
 jobs:
@@ -35,4 +35,5 @@ jobs:
           DYNAMODB_TABLE: ${{ secrets.DYNAMODB_TABLE }}
 
         run: python main.py
+
 
